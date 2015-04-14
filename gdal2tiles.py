@@ -2294,6 +2294,11 @@ def process(config,tile):
 # =============================================================================
 
 if __name__=='__main__':
+
+    # Decode the command line arguments to unicode to prevent problems with accents
+    for i, a in enumerate(sys.argv):
+      sys.argv[i] = a.decode(sys.stdin.encoding)
+
     argv = gdal.GeneralCmdLineProcessor( sys.argv )
     if argv:
         c1 = Configuration(argv[1:])
