@@ -61,7 +61,7 @@ except:
     # 'antialias' resampling is not available
     pass
 
-__version__ = "$Id: gdal2tiles.py 19288 2010-04-02 18:36:17Z rouault $"
+__version__ = "gdal2tiles.py 2015.0.1"
 
 resampling_list = ('average','near','bilinear','cubic','cubicspline','lanczos','antialias')
 profile_list = ('mercator','geodetic','raster') #,'zoomify')
