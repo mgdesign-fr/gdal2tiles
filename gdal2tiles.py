@@ -1704,23 +1704,23 @@ def generate_openlayers(options,swne,tminz,tmaxz,tileext,nativezoom,out_gt):
 
             map.zoomToExtent( mapBounds );
         """
-        
+
     elif options.profile == 'raster':
         s += """
             var options = {
                 controls: [],
-                maxExtent: new OpenLayers.Bounds(  %(west)s, %(south)s, %(east)s, %(north)s ),
-                maxResolution: %(rastermaxresolution)f,
-                numZoomLevels: %(rasterzoomlevels)d
+                //maxExtent: new OpenLayers.Bounds(  %(west)s, %(south)s, %(east)s, %(north)s ),
+                //maxResolution: %(rastermaxresolution)f,
+                //numZoomLevels: %(rasterzoomlevels)d
                 };
             map = new OpenLayers.Map('map', options);
 
             var layer = new OpenLayers.Layer.TMS( "TMS Layer","",
                 {  url: '', serviceVersion: '.', layername: '.', alpha: true,
-                    type: '"""+tileext+"""', getURL: overlay_getTileURL 
+                    type: '"""+tileext+"""', getURL: overlay_getTileURL
                 });
             map.addLayer(layer);
-            map.zoomToExtent( mapBounds );  
+            map.zoomToExtent( mapBounds );
     """ % args
 
 
