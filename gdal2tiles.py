@@ -2224,11 +2224,15 @@ def process_overview_tile_job(output,options,tiledriver,resampling,tileext, tile
 
 def generate_overview_tiles(config,profile,tile,out_data):
     """Generation of the overview tiles (higher in the pyramid) based on existing tiles"""
-    
-    print("Generating Overview Tiles:")
-    
-    tilebands = out_data.dataBandsCount + 1
-    
+    print("\nGenerating Overview Tiles:")
+
+    # hack for jpeg(gildas)
+    if config.options.format == 'JPEG':
+        tilebands = out_data.dataBandsCount
+    else:
+        tilebands = out_data.dataBandsCount + 1
+
+
     # Create directories for the tiles
     for tz in range(tile.tmaxz-1,tile.tminz-1,-1):
         tminx, tminy, tmaxx, tmaxy = tile.tminmax[tz]
