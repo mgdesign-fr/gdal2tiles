@@ -53,17 +53,9 @@ except:
 import os
 import math
 
-try:
-    from PIL import Image
-    import numpy
-    import osgeo.gdal_array as gdalarray
-except:
-    # 'antialias' resampling is not available
-    pass
-
 __version__ = "gdal2tiles.py 2015.0.1"
 
-resampling_list = ('average','near','bilinear','cubic','cubicspline','lanczos','antialias')
+resampling_list = ('average','near','bilinear','cubic','cubicspline','lanczos')
 profile_list = ('mercator','geodetic','raster') #,'zoomify')
 webviewer_list = ('all','google','openlayers','none')
 
@@ -612,7 +604,7 @@ def correct_ACW_nodata(in_nodata,verbose, out_ds):
     out_ds = gdal.Open(tempfilename) #, gdal.GA_ReadOnly)
 # delete the temporary file
     os.unlink(tempfilename) # set NODATA_VALUE metadata
-    out_ds.SetMetadataItem('NODATA_VALUES', '%i %i %i' % (in_nodata[0], in_nodata[1], in_nodata[2]))
+    out_ds.SetMetadataItem('NODATA_VALUES', " ".join( ['%d'%x for x in in_nodata] ))
     if verbose:
         print "Modified warping result saved into 'tiles1.vrt'"
         open("tiles1.vrt", "w").write(s)
@@ -625,6 +617,7 @@ def correct_ACW_mono_rgb(verbose, out_ds):
     tempfilename = tempfile.mktemp('-gdal2tiles.vrt')
     out_ds.GetDriver().CreateCopy(tempfilename, out_ds) # open as a text file
     s = open(tempfilename).read() # Add the warping options
+    # TODO should not consider 'Byte' dataType
     s = s.replace("""<BlockXSize>""", 
         """<VRTRasterBand dataType="Byte" band="%i" subClass="VRTWarpedRasterBand">
         <ColorInterp>Alpha</ColorInterp>
@@ -660,8 +653,9 @@ def image_warping(in_ds,in_srs_wkt,out_srs,verbose,in_nodata):
 
 # Correction of AutoCreateWarpedVRT for Mono (1 band) and RGB (3 bands) files without NODATA:
 # equivalent of gdalwarp -dstalpha
-    if in_nodata == [] and out_ds.RasterCount in [1, 3]:
-        out_ds = correct_ACW_mono_rgb(verbose,out_ds)
+    # TODO FIXME restore this ? breaks Float32 datatype
+    #if in_nodata == [] and out_ds.RasterCount in [1, 3]:
+    #    out_ds = correct_ACW_mono_rgb(verbose,out_ds)
     s = '''
 '''
     return out_ds
@@ -702,12 +696,21 @@ class Configuration (object):
         
         # Tile format
         # TODO : Passer ces deux variables en options dans optparse_init
+        # TODO : Is there any way to query a driver default filename extension ?
+        extByDriver = {
+          "PNG": "png"
+        , "JPEG": "jpg"
+        , "GTIFF": "tif"
+        }
         if not self.options.format:
             self.tiledriver = 'PNG'
-            self.tileext = 'png'
         else:
             self.tiledriver = self.options.format
-            self.tileext = self.tiledriver.lower()
+        
+        try:
+            self.tileext = extByDriver[self.tiledriver.upper()]
+        except:
+            error("Unsupported driver '%s'" % self.tiledriver)
         
         # Number of processes
         nb_process = self.options.nb_process
@@ -837,12 +840,6 @@ gdal_vrtmerge.py -o merged.vrt %s""" % " ".join(args))
                         pass
                 except:
                     error("'average' resampling algorithm is not available.", "Please use -r 'near' argument or upgrade to newer version of GDAL.")
-            elif self.options.resampling == 'antialias':
-                try:
-                    if numpy:
-                        pass
-                except:
-                    error("'antialias' resampling algorithm is not available.", "Install PIL (Python Imaging Library) and numpy.")
             elif self.options.resampling == 'near':
                 self.resampling = gdal.GRA_NearestNeighbour
                 self.querysize_c = TILESIZE
@@ -1987,19 +1984,6 @@ def scale_query_to_tile(options,tiledriver,resampling,dsquery, dstile, tilefilen
             if res != 0:
                 error("RegenerateOverview() failed on %s, error %d" % (tilefilename, res))
 
-    elif options.resampling == 'antialias':
-
-        # Scaling by PIL (Python Imaging Library) - improved Lanczos
-        array = numpy.zeros((querysize, querysize, tilebands), numpy.uint8)
-        for i in range(tilebands):
-            array[:,:,i] = gdalarray.BandReadAsArray(dsquery.GetRasterBand(i+1), 0, 0, querysize, querysize)
-        im = Image.fromarray(array, 'RGBA') # Always four bands
-        im1 = im.resize((tilesize,tilesize), Image.ANTIALIAS)
-        if os.path.exists(tilefilename):
-            im0 = Image.open(tilefilename)
-            im1 = Image.composite(im1, im0, im1) 
-        im1.save(tilefilename,tiledriver)
-        
     else:
 
         # Other algorithms are implemented by gdal.ReprojectImage().
@@ -2061,20 +2045,20 @@ def generate_base_tile(ds, tilebands, querysize, tz, ty, tx, tilefilename, rb, w
         # Tile dataset in memory
         rx, ry, rxsize, rysize = rb
         wx, wy, wxsize, wysize = wb
-        dstile = mem_drv.Create('', TILESIZE, TILESIZE, tilebands)
+        dstile = mem_drv.Create('', TILESIZE, TILESIZE, tilebands, gdal.GDT_Float32)      # TODO make this configurable
         data = ds.ReadRaster(rx, ry, rxsize, rysize, wxsize, wysize, band_list=list(range(1, out_data.dataBandsCount + 1)))
-        alpha = out_data.alphaband.ReadRaster(rx, ry, rxsize, rysize, wxsize, wysize)
+        # TODO FIXME restore alpha = out_data.alphaband.ReadRaster(rx, ry, rxsize, rysize, wxsize, wysize)
         if TILESIZE == querysize:
             # Use the ReadRaster result directly in tiles ('nearest neighbour' query)
             dstile.WriteRaster(wx, wy, wxsize, wysize, data, band_list=list(range(1, out_data.dataBandsCount + 1)))
-            dstile.WriteRaster(wx, wy, wxsize, wysize, alpha, band_list=[tilebands])
+            # TODO FIXME restore dstile.WriteRaster(wx, wy, wxsize, wysize, alpha, band_list=[tilebands])
         else:
-            dsquery = mem_drv.Create('', querysize, querysize, tilebands)
+            dsquery = mem_drv.Create('', querysize, querysize, tilebands, gdal.GDT_Float32)      # TODO make this configurable
             # TODO: fill the null value in case a tile without alpha is produced (now only png tiles are supported)
             #for i in range(1, tilebands+1):
             #   dsquery.GetRasterBand(1).Fill(tilenodata)
             dsquery.WriteRaster(wx, wy, wxsize, wysize, data, band_list=list(range(1, out_data.dataBandsCount + 1)))
-            dsquery.WriteRaster(wx, wy, wxsize, wysize, alpha, band_list=[tilebands])
+            # TODO FIXME restore dsquery.WriteRaster(wx, wy, wxsize, wysize, alpha, band_list=[tilebands])
             scale_query_to_tile(options,tiledriver,resampling,dsquery, dstile, tilefilename)
             del dsquery
         # Big ReadRaster query in memory scaled to the tilesize - all but 'near' algo
@@ -2082,9 +2066,8 @@ def generate_base_tile(ds, tilebands, querysize, tz, ty, tx, tilefilename, rb, w
         # the ReadRaster function returns high-quality raster (not ugly nearest neighbour)
         # TODO: Use directly 'near' for WaveLet files
         del data
-        if options.resampling != 'antialias':
-            # Write a copy of tile to png/jpg
-            out_drv.CreateCopy(tilefilename, dstile, strict=0)
+        # Write a copy of tile to png/jpg
+        out_drv.CreateCopy(tilefilename, dstile, strict=0, options=["COMPRESS=DEFLATE"])        # TODO pass driver options ? configurable
         del dstile
     
     
@@ -2120,7 +2103,11 @@ def generate_base_tiles(config,profile,tile,out_data):
     #tmaxx = tminx
     #tmaxy = tminy
     
-    tilebands = out_data.dataBandsCount + 1
+    tilebands = out_data.dataBandsCount
+    if tilebands == 3:
+      # add alpha
+      tilebands += 1
+    
     querysize = config.querysize_c
     
     if config.options.verbose:
@@ -2180,11 +2167,11 @@ def init_children(tile,tz,ty,tx):
 def generate_overview_tile(tilebands, tz, ty, tx, tilefilename,mem_drv,out_drv,output,options,tiledriver,resampling,tileext,tile):
     "Generate 1 tile from 4 underlying tiles"
     if not (options.resume and os.path.exists(tilefilename)):
-        dsquery = mem_drv.Create('', 2 * TILESIZE, 2 * TILESIZE, tilebands)
+        dsquery = mem_drv.Create('', 2 * TILESIZE, 2 * TILESIZE, tilebands, gdal.GDT_Float32)      # TODO make this configurable
         # TODO: fill the null value
         #for i in range(1, tilebands+1):
         #   dsquery.GetRasterBand(1).Fill(tilenodata)
-        dstile = mem_drv.Create('', TILESIZE, TILESIZE, tilebands)
+        dstile = mem_drv.Create('', TILESIZE, TILESIZE, tilebands, gdal.GDT_Float32)      # TODO make this configurable
         # TODO: Implement more clever walking on the tiles with cache functionality
         # probably walk should start with reading of four tiles from top left corner
         # Hilbert curve...
@@ -2209,9 +2196,7 @@ def generate_overview_tile(tilebands, tz, ty, tx, tilefilename,mem_drv,out_drv,o
         
         scale_query_to_tile(options,tiledriver,resampling,dsquery, dstile, tilefilename)
         # Write a copy of tile to png/jpg
-        if options.resampling != 'antialias':
-            # Write a copy of tile to png/jpg
-            out_drv.CreateCopy(tilefilename, dstile, strict=0)
+        out_drv.CreateCopy(tilefilename, dstile, strict=0, options=["COMPRESS=DEFLATE"])        # TODO pass driver options ? configurable
         if options.verbose:
             print "\tbuild from zoom", tz + 1, " tiles:", 2 * tx, 2 * ty, 2 * tx + 1, 2 * ty, 2 * tx, 2 * ty + 1, 2 * tx + 1, 2 * ty + 1 # Create a KML file for this tile.
 
@@ -2226,11 +2211,10 @@ def generate_overview_tiles(config,profile,tile,out_data):
     """Generation of the overview tiles (higher in the pyramid) based on existing tiles"""
     print("\nGenerating Overview Tiles:")
 
+    tilebands = out_data.dataBandsCount
     # hack for jpeg(gildas)
-    if config.options.format == 'JPEG':
-        tilebands = out_data.dataBandsCount
-    else:
-        tilebands = out_data.dataBandsCount + 1
+    if tilebands ==3 and config.options.format != 'JPEG':
+        tilebands += 1
 
 
     # Create directories for the tiles
