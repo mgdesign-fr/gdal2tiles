@@ -484,7 +484,7 @@ class MultiProcess(object):
                 alive = p.is_alive()
                 if not alive:
                     alive_count -= 1
-                progressbar(n.value/float(ncount))
+                progressbar(n.value, ncount)
             done = (alive_count == 0)
 
 
@@ -1091,9 +1091,11 @@ def error(msg, details = "" ):
     sys.exit(0)
     
 
-def progressbar(complete = 0.0):
+def progressbar(nvalue, ncount):
     """Print progressbar for float value 0..1"""
-    gdal.TermProgress_nocb(complete)
+    complete = nvalue/float(ncount)
+    message = "%d out of %d" % (nvalue, ncount)
+    gdal.TermProgress_nocb(complete, message)
 
 
 # FONCTIONS METADATAS
