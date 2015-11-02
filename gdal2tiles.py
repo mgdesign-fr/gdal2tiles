@@ -40,6 +40,7 @@
 # TODO supprimer tous nos TODO en francais
 
 import sys
+import time
 import multiprocessing
 
 try:
@@ -486,6 +487,7 @@ class MultiProcess(object):
                     alive_count -= 1
                 progressbar(n.value, ncount)
             done = (alive_count == 0)
+        progressbar(n.value, ncount)
 
 
 class Profile(object):
@@ -1092,12 +1094,41 @@ def error(msg, details = "" ):
     sys.exit(0)
     
 
-def progressbar(nvalue, ncount):
-    """Print progressbar for float value 0..1"""
-    complete = nvalue/float(ncount)
-    message = "%d out of %d" % (nvalue, ncount)
-    gdal.TermProgress_nocb(complete, message)
+_g_progressbar_context = None
 
+def progressbar(nvalue, ncount):
+    # NOTE we're not using gdal 'TermProgress_nocb' as its progressbar is not user friendly enough
+    global _g_progressbar_context
+    if _g_progressbar_context is None:
+      _g_progressbar_context = { "samples": [] }
+    
+    samples = _g_progressbar_context["samples"]
+    num_samples = len(samples)
+    
+    if num_samples > 0:
+      prev_nvalue = samples[-1][1]
+      if nvalue < prev_nvalue:
+        # reset the samples, likely a new progressbar
+        _g_progressbar_context["samples"] = []
+    
+    elif num_samples > 8:
+      del samples[num_samples-8:]
+    
+    now = time.clock()
+    samples.append( (now, nvalue) )
+
+    first_sample = samples[0]
+    tiles_done = nvalue - first_sample[1]
+    
+    tiles_per_second = None
+    if tiles_done > 0:
+      tiles_per_second = float(tiles_done) / (now - first_sample[0])
+    
+    percent = 100.0 * float(nvalue) / ncount
+    details_msg = ""
+    if tiles_per_second is not None:
+      details_msg += " | %d tiles/sec" % int(tiles_per_second)
+    print "%2.2f%% - %d/%d tiles%s\r" % (percent, nvalue, ncount, details_msg),
 
 # FONCTIONS METADATAS
 
