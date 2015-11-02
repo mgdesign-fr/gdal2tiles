@@ -61,7 +61,7 @@ except:
     # 'antialias' resampling is not available
     pass
 
-__version__ = "gdal2tiles.py 2015.0.1"
+__version__ = "gdal2tiles.py 2015.0.2"
 
 resampling_list = ('average','near','bilinear','cubic','cubicspline','lanczos','antialias')
 profile_list = ('mercator','geodetic','raster') #,'zoomify')
@@ -706,6 +706,7 @@ class Configuration (object):
             self.tiledriver = 'PNG'
             self.tileext = 'png'
         else:
+            self.options.format = self.options.format.lower()
             self.tiledriver = self.options.format
             self.tileext = self.tiledriver.lower()
         
@@ -2229,7 +2230,7 @@ def generate_overview_tiles(config,profile,tile,out_data):
     print("\nGenerating Overview Tiles:")
 
     # hack for jpeg(gildas)
-    if config.options.format == 'JPEG':
+    if config.options.format == 'jpeg':
         tilebands = out_data.dataBandsCount
     else:
         tilebands = out_data.dataBandsCount + 1
